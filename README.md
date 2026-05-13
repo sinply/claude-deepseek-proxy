@@ -52,6 +52,8 @@ Keep Claude-compatible model names in the Claude-3p model list:
 powershell -ExecutionPolicy Bypass -File .\start-claude-deepseek-proxy.ps1
 ```
 
+The script starts the Node proxy as a hidden background process and then exits. If `127.0.0.1:8787` is already listening, it exits without starting another copy.
+
 ## Autostart
 
 Install or repair the Windows scheduled task:
@@ -72,8 +74,11 @@ Remove autostart:
 powershell -ExecutionPolicy Bypass -File .\uninstall-autostart.ps1
 ```
 
+The scheduled task may show `Ready` after it runs. That is expected: the task starts the hidden Node proxy and exits, while `node.exe` keeps listening in the background.
+
 ## Notes
 
 - This is not a system proxy.
 - It only affects software explicitly configured to use `http://127.0.0.1:8787`.
 - API keys are not stored in this project. Claude-3p sends the configured API key in the request headers, and the proxy forwards it.
+- Runtime logs are written to `proxy.log`, which is ignored by Git.
