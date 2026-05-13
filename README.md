@@ -1,6 +1,6 @@
 # Claude DeepSeek Model Rewrite Proxy
 
-A small local HTTP proxy for Claude-3p / Claude Code gateway configs.
+Local proxy for rewriting Claude-compatible DeepSeek model aliases to real DeepSeek Anthropic API model names.
 
 It keeps Claude-compatible model names in the Claude UI/config, then rewrites them to the real DeepSeek model names before forwarding requests to DeepSeek's Anthropic-compatible endpoint.
 
