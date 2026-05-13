@@ -36,4 +36,12 @@ $env:UPSTREAM_BASE_URL = "https://api.deepseek.com/anthropic"
 $env:LISTEN_HOST = $hostName
 $env:LISTEN_PORT = [string]$port
 
-& $nodeExe $proxyScript 2>> $logPath
+$process = Start-Process `
+  -FilePath $nodeExe `
+  -ArgumentList "`"$proxyScript`"" `
+  -WorkingDirectory $PSScriptRoot `
+  -WindowStyle Hidden `
+  -RedirectStandardError $logPath `
+  -PassThru
+
+"$(Get-Date -Format s) started proxy pid=$($process.Id) on ${hostName}:${port}" | Add-Content -LiteralPath $logPath
