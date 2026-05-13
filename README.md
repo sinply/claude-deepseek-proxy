@@ -17,6 +17,12 @@ cluade-deepseek-v4-flash -> deepseek-v4-flash
 
 Requires Node.js and Windows PowerShell.
 
+HTML usage guide:
+
+```text
+docs/index.html
+```
+
 The default local proxy address is:
 
 ```text
@@ -82,3 +88,7 @@ The scheduled task may show `Ready` after it runs. That is expected: the task st
 - It only affects software explicitly configured to use `http://127.0.0.1:8787`.
 - API keys are not stored in this project. Claude-3p sends the configured API key in the request headers, and the proxy forwards it.
 - Runtime logs are written to `proxy.log`, which is ignored by Git.
+
+## License
+
+MIT. See `LICENSE`.
