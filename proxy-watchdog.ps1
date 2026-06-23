@@ -12,7 +12,23 @@ $logPath     = Join-Path $scriptDir "proxy.log"
 $watchdogLog = Join-Path $scriptDir "watchdog.log"
 $listenHost  = "127.0.0.1"
 $listenPort  = 8787
-$nodeExe     = "C:\Program Files\nodejs\node.exe"
+# Resolve node.exe: prefer config's nodePath, fall back to common locations.
+$nodeExe = $null
+if (Test-Path $configPath) {
+  try {
+    $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+    if ($cfg.nodePath -and (Test-Path $cfg.nodePath)) { $nodeExe = $cfg.nodePath }
+  } catch { }
+}
+if (-not $nodeExe) {
+  foreach ($candidate in @("C:\Program Files\nodejs\node.exe", "D:\Program Files\nodejs\node.exe", (Get-Command node.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source))) {
+    if ($candidate -and (Test-Path $candidate)) { $nodeExe = $candidate; break }
+  }
+}
+if (-not $nodeExe) {
+  Write-Log "ERROR: node.exe not found (set nodePath in proxy-config.json)"
+  exit 1
+}
 
 # Stop grace period: how long after the last claude.exe exits before we stop the proxy.
 # Covers quick restarts and the UWP multi-process shutdown chatter.

@@ -99,6 +99,7 @@ Each request logs `[provider] original -> mapped`, e.g. `[deepseek] claude-sonne
 
 ```json
 {
+  "nodePath": "D:\\Program Files\\nodejs\\node.exe",
   "providers": {
     "deepseek": {
       "upstream": "https://api.deepseek.com/anthropic",
@@ -117,6 +118,12 @@ Each request logs `[provider] original -> mapped`, e.g. `[deepseek] claude-sonne
   }
 }
 ```
+
+### `nodePath` (optional)
+
+Absolute path to `node.exe`. All PowerShell scripts (`proxy-watchdog.ps1`, `start-claude-deepseek-proxy.ps1`, `start-claude.ps1`) read this field to launch the proxy. If unset or the path does not exist, they fall back to auto-detection in this order: `C:\Program Files\nodejs\node.exe`, `D:\Program Files\nodejs\node.exe`, then `node.exe` on `PATH`.
+
+Set this when Node.js is installed in a non-standard location to avoid hard-coding paths in scripts.
 
 Override the config path with `PROXY_CONFIG_PATH` if you want to keep a custom config elsewhere.
 

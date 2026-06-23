@@ -44,6 +44,8 @@ Singleton guard via named mutex (`Global\ClaudeModelRewriteProxyWatchdog`) preve
 
 `proxy-config.json` (co-located with the proxy script) defines providers. Override path with `PROXY_CONFIG_PATH`.
 
+Optional top-level `nodePath` field (absolute path to `node.exe`) is read by all PowerShell scripts (`proxy-watchdog.ps1`, `start-claude-deepseek-proxy.ps1`, `start-claude.ps1`). If unset or path missing, they fall back to `C:\Program Files\nodejs\node.exe` → `D:\Program Files\nodejs\node.exe` → `node.exe` on `PATH`. Use this when Node.js is installed in a non-standard location instead of editing scripts.
+
 Default mapping:
 
 ```text

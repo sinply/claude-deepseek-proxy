@@ -7,6 +7,21 @@ $logPath      = Join-Path $PSScriptRoot "proxy.log"
 $listenHost   = "127.0.0.1"
 $listenPort   = 8787
 
+# Resolve node.exe: prefer config's nodePath, fall back to common locations.
+$nodeExe = $null
+if (Test-Path $configPath) {
+  try {
+    $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+    if ($cfg.nodePath -and (Test-Path $cfg.nodePath)) { $nodeExe = $cfg.nodePath }
+  } catch { }
+}
+if (-not $nodeExe) {
+  foreach ($c in @("C:\Program Files\nodejs\node.exe", "D:\Program Files\nodejs\node.exe", (Get-Command node.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source))) {
+    if ($c -and (Test-Path $c)) { $nodeExe = $c; break }
+  }
+}
+if (-not $nodeExe) { Write-Error "node.exe not found (set nodePath in proxy-config.json)"; exit 1 }
+
 # Claude Code client (Microsoft Store install). Resolve at runtime because the
 # version-suffixed path changes on every update.
 $claudeExe = $null
@@ -61,7 +76,7 @@ if (-not $proxyPid) {
   $env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
 
   $proc = Start-Process `
-    -FilePath "C:\Program Files\nodejs\node.exe" `
+    -FilePath $nodeExe `
     -ArgumentList "`"$proxyScript`"" `
     -WorkingDirectory $PSScriptRoot `
     -WindowStyle Hidden `

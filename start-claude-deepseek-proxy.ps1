@@ -1,6 +1,19 @@
 $ErrorActionPreference = "Stop"
 
-$nodeExe = "C:\Program Files\nodejs\node.exe"
+$configPath = Join-Path $PSScriptRoot "proxy-config.json"
+$nodeExe = $null
+if (Test-Path $configPath) {
+  try {
+    $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+    if ($cfg.nodePath -and (Test-Path $cfg.nodePath)) { $nodeExe = $cfg.nodePath }
+  } catch { }
+}
+if (-not $nodeExe) {
+  foreach ($c in @("C:\Program Files\nodejs\node.exe", "D:\Program Files\nodejs\node.exe", (Get-Command node.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source))) {
+    if ($c -and (Test-Path $c)) { $nodeExe = $c; break }
+  }
+}
+if (-not $nodeExe) { throw "node.exe not found (set nodePath in proxy-config.json)" }
 $proxyScript = Join-Path $PSScriptRoot "model-rewrite-proxy.cjs"
 $logPath = Join-Path $PSScriptRoot "proxy.log"
 $hostName = "127.0.0.1"

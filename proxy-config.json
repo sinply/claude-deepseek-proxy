@@ -1,4 +1,5 @@
 {
+  "nodePath": "D:\\Program Files\\nodejs\\node.exe",
   "providers": {
     "deepseek": {
       "upstream": "https://api.deepseek.com/anthropic",

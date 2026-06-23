@@ -99,6 +99,7 @@ Get-Content .\proxy-*.log -Tail 10
 
 ```json
 {
+  "nodePath": "D:\\Program Files\\nodejs\\node.exe",
   "providers": {
     "deepseek": {
       "upstream": "https://api.deepseek.com/anthropic",
@@ -117,6 +118,12 @@ Get-Content .\proxy-*.log -Tail 10
   }
 }
 ```
+
+### `nodePath`（可选）
+
+`node.exe` 的绝对路径。所有 PowerShell 脚本（`proxy-watchdog.ps1`、`start-claude-deepseek-proxy.ps1`、`start-claude.ps1`）都读取此字段来启动代理。如果未设置或路径不存在，会按以下顺序自动探测：`C:\Program Files\nodejs\node.exe`、`D:\Program Files\nodejs\node.exe`，然后是 `PATH` 中的 `node.exe`。
+
+当 Node.js 安装在非默认位置时，设置此字段可避免在脚本中硬编码路径。
 
 如需自定义配置路径，可通过环境变量 `PROXY_CONFIG_PATH` 覆盖。
 
