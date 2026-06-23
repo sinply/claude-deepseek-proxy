@@ -14,7 +14,7 @@ claude-sonnet-4.6 -> deepseek-v4-flash
 claude-opus-4.6  -> deepseek-v4-pro
 
 # ark provider (Volcengine Ark code plan)
-claude-sonnet-4.6 -> kimi-k2.6
+claude-sonnet-4.6 -> kimi-k2.7-code
 claude-opus-4.6  -> glm-5.2
 ```
 
@@ -110,7 +110,7 @@ Each request logs `[provider] original -> mapped`, e.g. `[deepseek] claude-sonne
     "ark": {
       "upstream": "https://ark.cn-beijing.volces.com/api/coding",
       "map": {
-        "claude-sonnet-4.6": "kimi-k2.6",
+        "claude-sonnet-4.6": "kimi-k2.7-code",
         "claude-opus-4.6":  "glm-5.2"
       }
     }
@@ -121,6 +121,22 @@ Each request logs `[provider] original -> mapped`, e.g. `[deepseek] claude-sonne
 Override the config path with `PROXY_CONFIG_PATH` if you want to keep a custom config elsewhere.
 
 To add a new provider: add an entry under `providers`, then point Claude Code at `http://127.0.0.1:8787/<name>/`. The `/v1/models` response is generated from the map keys automatically.
+
+## Modifying the Model Mapping
+
+To change which real model a Claude name maps to, edit `proxy-config.json`:
+
+1. Open `proxy-config.json`.
+2. Under the desired `providers.<name>.map`, change the value for the official Claude model name.
+   - Keys (`claude-sonnet-4.6`, `claude-opus-4.6`) are the names Claude Code sees and sends.
+   - Values are the real model IDs the upstream provider expects.
+3. Save the file.
+4. Restart the proxy so the new config is loaded:
+   - If the watchdog is running: stop the proxy process; the watchdog will restart it within a few seconds.
+   - If running manually: stop the current `node` process and run `start-claude-deepseek-proxy.ps1` again.
+5. Optional: if you use Claude-3p, update the `labelOverride` field in the matching configLibrary entry so the UI label matches the new model.
+
+You can also add new providers or new Claude-name-to-real-model mappings. Each provider's `/v1/models` response is generated automatically from its map keys, so Claude Code will see any new official Claude names immediately after restart.
 
 ## TLS Note
 

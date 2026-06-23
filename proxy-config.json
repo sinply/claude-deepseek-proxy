@@ -10,7 +10,7 @@
     "ark": {
       "upstream": "https://ark.cn-beijing.volces.com/api/coding",
       "map": {
-        "claude-sonnet-4.6": "kimi-k2.6",
+        "claude-sonnet-4.6": "kimi-k2.7-code",
         "claude-opus-4.6": "glm-5.2"
       }
     }
