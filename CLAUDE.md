@@ -48,7 +48,7 @@ Default mapping:
 
 ```text
 deepseek: claude-sonnet-4.6 -> deepseek-v4-flash, claude-opus-4.6 -> deepseek-v4-pro
-ark:      claude-sonnet-4.6 -> kimi-k2.6,         claude-opus-4.6 -> glm-5.2
+ark:      claude-sonnet-4.6 -> kimi-k2.7-code,    claude-opus-4.6 -> glm-5.2
 ```
 
 ## TLS
@@ -74,6 +74,8 @@ DeepSeek sends an incomplete certificate chain. Node.js doesn't do AIA fetching 
 - `start-claude-deepseek-proxy.ps1` — standalone proxy starter (no watchdog), legacy/manual use.
 - `start-claude.ps1` — wrapper that starts proxy + Claude and stops proxy on Claude exit (alternative to watchdog).
 - `status.ps1` — check task / watchdog / proxy / Claude state.
+- `README.md` — project overview and usage (English).
+- `README_CN.md` — project overview and usage (Chinese).
 - `docs/index.html` — static HTML usage guide.
 
 ## Validation Checklist
