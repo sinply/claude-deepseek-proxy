@@ -1,93 +1,163 @@
-# Claude DeepSeek Model Rewrite Proxy
+# Claude Model Rewrite Proxy
 
-Local proxy for rewriting Claude-compatible DeepSeek model aliases to real DeepSeek Anthropic API model names.
+Local proxy that lets Claude Code (and other Anthropic-compatible clients) keep using **official Claude model names** while routing requests to multiple third-party Anthropic-compatible upstreams (DeepSeek, Volcengine Ark / 方舟 code plan, etc.).
 
-It keeps Claude-compatible model names in the Claude UI/config, then rewrites them to the real DeepSeek model names before forwarding requests to DeepSeek's Anthropic-compatible endpoint.
+The Claude Code client has become stricter and requires real `claude-*` model names in its model list. This proxy keeps those names on the client side and rewrites them to the real backend model names per provider.
 
-## Mapping
+A watchdog keeps the proxy in sync with the Claude Code client: proxy starts when Claude runs, stops shortly after Claude exits. No manual management.
 
-```text
-claude-deepseek-v4-pro   -> deepseek-v4-pro
-cluade-deepseek-v4-pro   -> deepseek-v4-pro
-claude-deepseek-v4-flash -> deepseek-v4-flash
-cluade-deepseek-v4-flash -> deepseek-v4-flash
-```
-
-## Runtime
-
-Requires Node.js and Windows PowerShell.
-
-HTML usage guide:
+## Mapping (default `proxy-config.json`)
 
 ```text
-docs/index.html
+# deepseek provider
+claude-sonnet-4.6 -> deepseek-v4-flash
+claude-opus-4.6  -> deepseek-v4-pro
+
+# ark provider (Volcengine Ark code plan)
+claude-sonnet-4.6 -> kimi-k2.6
+claude-opus-4.6  -> glm-5.2
 ```
 
-The default local proxy address is:
+The same Claude model name maps to different real models depending on which provider you point at.
+
+## Routing
+
+A single proxy listens on `http://127.0.0.1:8787`. The first path segment selects the provider:
 
 ```text
-http://127.0.0.1:8787
+http://127.0.0.1:8787/deepseek/   -> https://api.deepseek.com/anthropic
+http://127.0.0.1:8787/ark/        -> https://ark.cn-beijing.volces.com/api/coding
 ```
 
-The default upstream is:
+Set the Claude Code base URL to one of those (including the trailing slash). The remainder of the path is forwarded to the upstream as-is.
 
-```text
-https://api.deepseek.com/anthropic
-```
+`GET /<provider>/v1/models` is intercepted and answered with a synthetic Anthropic-format response listing the official Claude model IDs from the provider's map. This satisfies Claude Code's model discovery check without relying on the upstream `/v1/models` endpoint.
 
-## Claude-3p Config
+## Watchdog (auto start/stop with Claude Code)
 
-Set the Claude-3p gateway base URL to:
+`proxy-watchdog.ps1` runs as a hidden background process (installed via `install-autostart.ps1` as a logon scheduled task). Every 5 seconds it polls for `Claude.exe`:
 
-```text
-http://127.0.0.1:8787
-```
+- Claude running + proxy down -> start proxy
+- Claude gone for 15 seconds -> stop proxy
 
-Keep Claude-compatible model names in the Claude-3p model list:
+This means you launch Claude Code normally (Start menu, shortcut, etc.) and the proxy comes up automatically. Quit Claude and the proxy stops. No wrapper script, no manual start.
 
-```json
-[
-  { "name": "claude-deepseek-v4-pro", "supports1m": true },
-  { "name": "claude-deepseek-v4-flash", "supports1m": true }
-]
-```
+Singleton guard via named mutex prevents duplicate watchdog instances.
 
-## Manual Start
+## Usage
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start-claude-deepseek-proxy.ps1
-```
-
-The script starts the Node proxy as a hidden background process and then exits. If `127.0.0.1:8787` is already listening, it exits without starting another copy.
-
-## Autostart
-
-Install or repair the Windows scheduled task:
+### 1. Install the watchdog (one-time)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 ```
 
-Check status:
+This installs a logon scheduled task `ClaudeModelRewriteProxyWatchdog` and starts it immediately. The watchdog then runs whenever you are logged in.
+
+### 2. Configure Claude Code
+
+Point Claude Code at the desired provider via `ANTHROPIC_BASE_URL` (or the Claude-3p gateway config):
+
+```text
+http://127.0.0.1:8787/deepseek/   # DeepSeek
+http://127.0.0.1:8787/ark/        # Volcengine Ark
+```
+
+Keep the official Claude model names in the model list:
+
+```json
+[
+  { "name": "claude-sonnet-4.6" },
+  { "name": "claude-opus-4.6" }
+]
+```
+
+API keys are not stored here. Claude Code sends the configured API key in the request headers, and the proxy forwards them unchanged.
+
+### 3. Launch Claude Code normally
+
+Start Claude Code however you normally do. The watchdog detects it within 5 seconds and starts the proxy. Quit Claude Code and the proxy stops after a 15-second grace period.
+
+### 4. Verify
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\status.ps1
 ```
 
-Remove autostart:
+Or check logs directly:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\uninstall-autostart.ps1
+Get-Content .\watchdog.log -Tail 10
+Get-Content .\proxy-*.log -Tail 10
 ```
 
-The scheduled task may show `Ready` after it runs. That is expected: the task starts the hidden Node proxy and exits, while `node.exe` keeps listening in the background.
+Each request logs `[provider] original -> mapped`, e.g. `[deepseek] claude-sonnet-4.6 -> deepseek-v4-flash`.
+
+## Configuration File
+
+`proxy-config.json` (next to `model-rewrite-proxy.cjs`) defines providers:
+
+```json
+{
+  "providers": {
+    "deepseek": {
+      "upstream": "https://api.deepseek.com/anthropic",
+      "map": {
+        "claude-sonnet-4.6": "deepseek-v4-flash",
+        "claude-opus-4.6":  "deepseek-v4-pro"
+      }
+    },
+    "ark": {
+      "upstream": "https://ark.cn-beijing.volces.com/api/coding",
+      "map": {
+        "claude-sonnet-4.6": "kimi-k2.6",
+        "claude-opus-4.6":  "glm-5.2"
+      }
+    }
+  }
+}
+```
+
+Override the config path with `PROXY_CONFIG_PATH` if you want to keep a custom config elsewhere.
+
+To add a new provider: add an entry under `providers`, then point Claude Code at `http://127.0.0.1:8787/<name>/`. The `/v1/models` response is generated from the map keys automatically.
+
+## TLS Note
+
+DeepSeek's server sends an incomplete certificate chain. Node.js (unlike Windows/.NET) does not fetch missing intermediate certs via AIA, so the proxy sets `NODE_TLS_REJECT_UNAUTHORIZED=0` for upstream connections. This only affects the local proxy process's outbound TLS to upstreams, not the loopback connection from Claude Code to the proxy.
+
+## Manual Operations
+
+```powershell
+# Install watchdog (auto-start at logon)
+powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
+
+# Status
+powershell -ExecutionPolicy Bypass -File .\status.ps1
+
+# Uninstall (stops watchdog, kills proxy, removes task)
+powershell -ExecutionPolicy Bypass -File .\uninstall-autostart.ps1
+
+# Start proxy manually without watchdog (legacy)
+powershell -ExecutionPolicy Bypass -File .\start-claude-deepseek-proxy.ps1
+```
+
+## Files
+
+- `model-rewrite-proxy.cjs` — proxy implementation: path-routed, per-provider model rewrite, `/v1/models` interception.
+- `proxy-config.json` — provider definitions (upstream URL + model map).
+- `proxy-watchdog.ps1` — background watchdog that syncs proxy lifecycle to Claude Code.
+- `install-autostart.ps1` / `uninstall-autostart.ps1` — install/remove the watchdog scheduled task.
+- `start-claude-deepseek-proxy.ps1` — standalone proxy starter (no watchdog), kept for manual use.
+- `start-claude.ps1` — alternative wrapper that starts proxy + Claude and stops proxy on Claude exit.
+- `status.ps1` — check task / watchdog / proxy / Claude state.
 
 ## Notes
 
 - This is not a system proxy.
-- It only affects software explicitly configured to use `http://127.0.0.1:8787`.
-- API keys are not stored in this project. Claude-3p sends the configured API key in the request headers, and the proxy forwards it.
-- Runtime logs are written to `proxy.log`, which is ignored by Git.
+- Only software explicitly configured to use `http://127.0.0.1:8787/<provider>/` is affected.
+- Unknown model names are forwarded unchanged (no rewrite). The proxy never invents a mapping.
+- Logs: `watchdog.log` for watchdog actions, `proxy-<timestamp>.log` per proxy start for proxy output. All ignored by Git.
 
 ## License
 

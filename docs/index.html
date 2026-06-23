@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Claude DeepSeek Model Rewrite Proxy</title>
+  <title>Claude Model Rewrite Proxy</title>
   <style>
     :root {
       color-scheme: light;
@@ -158,8 +158,8 @@
 <body>
   <header>
     <div class="wrap hero">
-      <h1>Claude DeepSeek Model Rewrite Proxy</h1>
-      <p class="lede">A local proxy that lets Claude-3p keep Claude-compatible model aliases while DeepSeek receives the real Anthropic API model names.</p>
+      <h1>Claude Model Rewrite Proxy</h1>
+      <p class="lede">A local proxy that lets Claude Code keep using official Claude model names while routing requests to multiple third-party Anthropic-compatible upstreams (DeepSeek, Volcengine Ark / 方舟 code plan, etc.). A background watchdog starts the proxy when Claude Code runs and stops it when Claude Code exits.</p>
     </div>
   </header>
 
@@ -167,59 +167,135 @@
     <section>
       <h2>How It Works</h2>
       <ol>
-        <li>Claude-3p sends requests to <code>http://127.0.0.1:8787</code>.</li>
-        <li>The proxy forwards the request to <code>https://api.deepseek.com/anthropic</code>.</li>
-        <li>Only the JSON <code>model</code> field is rewritten when it matches a known alias.</li>
-        <li>Headers, message content, tool parameters, streaming flags, and responses are forwarded.</li>
+        <li>A background watchdog polls for <code>Claude.exe</code> every 5 seconds.</li>
+        <li>When Claude Code is running, the watchdog ensures the proxy is up on <code>127.0.0.1:8787</code>.</li>
+        <li>Claude Code sends requests to <code>http://127.0.0.1:8787/&lt;provider&gt;/...</code>.</li>
+        <li>The first path segment selects the upstream provider (e.g. <code>deepseek</code>, <code>ark</code>).</li>
+        <li>The proxy forwards the remainder of the path to that provider's upstream.</li>
+        <li>Only the JSON <code>model</code> field is rewritten according to the provider's map.</li>
+        <li><code>GET /&lt;provider&gt;/v1/models</code> is intercepted and answered synthetically with official Claude model IDs.</li>
+        <li>When Claude Code exits and stays gone for 15 seconds, the watchdog stops the proxy.</li>
       </ol>
     </section>
 
     <section>
-      <h2>Model Mapping</h2>
+      <h2>Model Mapping (default <code>proxy-config.json</code>)</h2>
       <table>
         <thead>
           <tr>
-            <th>Claude Alias</th>
-            <th>DeepSeek Model</th>
+            <th>Provider</th>
+            <th>Upstream</th>
+            <th>Claude Model</th>
+            <th>Real Model</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><code>claude-deepseek-v4-pro</code></td>
-            <td><code>deepseek-v4-pro</code></td>
-          </tr>
-          <tr>
-            <td><code>cluade-deepseek-v4-pro</code></td>
-            <td><code>deepseek-v4-pro</code></td>
-          </tr>
-          <tr>
-            <td><code>claude-deepseek-v4-flash</code></td>
+            <td rowspan="2"><code>deepseek</code></td>
+            <td rowspan="2"><code>https://api.deepseek.com/anthropic</code></td>
+            <td><code>claude-sonnet-4.6</code></td>
             <td><code>deepseek-v4-flash</code></td>
           </tr>
           <tr>
-            <td><code>cluade-deepseek-v4-flash</code></td>
-            <td><code>deepseek-v4-flash</code></td>
+            <td><code>claude-opus-4.6</code></td>
+            <td><code>deepseek-v4-pro</code></td>
+          </tr>
+          <tr>
+            <td rowspan="2"><code>ark</code></td>
+            <td rowspan="2"><code>https://ark.cn-beijing.volces.com/api/coding</code></td>
+            <td><code>claude-sonnet-4.6</code></td>
+            <td><code>kimi-k2.6</code></td>
+          </tr>
+          <tr>
+            <td><code>claude-opus-4.6</code></td>
+            <td><code>glm-5.2</code></td>
           </tr>
         </tbody>
       </table>
+      <p>The same Claude model name maps to different real models depending on which provider you point at.</p>
     </section>
 
     <section>
-      <h2>Claude-3p Configuration</h2>
-      <p>Set the gateway base URL to the local proxy:</p>
-      <pre><code>http://127.0.0.1:8787</code></pre>
-      <p>Keep Claude-compatible model names in the model list:</p>
+      <h2>Routing</h2>
+      <p>A single proxy listens on <code>http://127.0.0.1:8787</code>. The first path segment selects the provider:</p>
+      <pre><code>http://127.0.0.1:8787/deepseek/   -&gt; https://api.deepseek.com/anthropic
+http://127.0.0.1:8787/ark/        -&gt; https://ark.cn-beijing.volces.com/api/coding</code></pre>
+      <p>Set the Claude Code base URL to one of those (including the trailing slash). The remainder of the path is forwarded to the upstream as-is.</p>
+    </section>
+
+    <section>
+      <h2>Claude Code Configuration</h2>
+      <p>Use DeepSeek:</p>
+      <pre><code>$env:ANTHROPIC_BASE_URL = "http://127.0.0.1:8787/deepseek/"
+$env:ANTHROPIC_API_KEY  = "your-deepseek-api-key"
+claude</code></pre>
+      <p>Use Volcengine Ark (方舟 code plan):</p>
+      <pre><code>$env:ANTHROPIC_BASE_URL = "http://127.0.0.1:8787/ark/"
+$env:ANTHROPIC_API_KEY  = "your-ark-api-key"
+claude</code></pre>
+      <p>Keep the official Claude model names in the Claude Code model list:</p>
       <pre><code>[
-  { "name": "claude-deepseek-v4-pro", "supports1m": true },
-  { "name": "claude-deepseek-v4-flash", "supports1m": true }
+  { "name": "claude-sonnet-4.6" },
+  { "name": "claude-opus-4.6" }
 ]</code></pre>
+      <div class="note">Switching providers does not require restarting the proxy — just change the path prefix in <code>ANTHROPIC_BASE_URL</code>.</div>
     </section>
 
     <section>
-      <h2>Start In Background</h2>
-      <p>Manual start:</p>
-      <pre><code>powershell -ExecutionPolicy Bypass -File .\start-claude-deepseek-proxy.ps1</code></pre>
-      <p>The script starts <code>node.exe</code> as a hidden background process and exits. If port <code>8787</code> is already listening, it will not start another copy.</p>
+      <h2>Configuration File</h2>
+      <p><code>proxy-config.json</code> (next to <code>model-rewrite-proxy.cjs</code>) defines providers:</p>
+      <pre><code>{
+  "providers": {
+    "deepseek": {
+      "upstream": "https://api.deepseek.com/anthropic",
+      "map": {
+        "claude-sonnet-4.6": "deepseek-v4-flash",
+        "claude-opus-4.6":  "deepseek-v4-pro"
+      }
+    },
+    "ark": {
+      "upstream": "https://ark.cn-beijing.volces.com/api/coding",
+      "map": {
+        "claude-sonnet-4.6": "kimi-k2.6",
+        "claude-opus-4.6":  "glm-5.2"
+      }
+    }
+  }
+}</code></pre>
+      <p>Override the config path with <code>PROXY_CONFIG_PATH</code>. To add a new provider: add an entry under <code>providers</code>, then point Claude Code at <code>http://127.0.0.1:8787/&lt;name&gt;/</code>.</p>
+    </section>
+
+    <section>
+      <h2>Watchdog (auto start/stop)</h2>
+      <p>Install the watchdog as a logon scheduled task (one-time):</p>
+      <pre><code>powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1</code></pre>
+      <p>The watchdog runs hidden in the background. It starts the proxy when Claude Code launches and stops it 15 seconds after Claude Code exits. Singleton guard via named mutex prevents duplicates.</p>
+      <p>Check status:</p>
+      <pre><code>powershell -ExecutionPolicy Bypass -File .\status.ps1</code></pre>
+      <p>Uninstall (stops watchdog, kills proxy, removes task):</p>
+      <pre><code>powershell -ExecutionPolicy Bypass -File .\uninstall-autostart.ps1</code></pre>
+      <div class="note">You can also start the proxy manually with <code>start-claude-deepseek-proxy.ps1</code> (legacy, no watchdog) or use <code>start-claude.ps1</code> as a wrapper that stops the proxy when Claude exits.</div>
+    </section>
+
+    <section>
+      <h2>Verify</h2>
+      <p>With the proxy running, test directly with curl:</p>
+      <pre><code>curl -X POST http://127.0.0.1:8787/deepseek/v1/messages `
+  -H "content-type: application/json" `
+  -H "x-api-key: $env:ANTHROPIC_API_KEY" `
+  -d '{\"model\":\"claude-sonnet-4.6\",\"max_tokens\":16,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}'</code></pre>
+      <p>Check <code>proxy.log</code> — each request logs <code>[provider] original -&gt; mapped</code>, e.g. <code>[deepseek] claude-sonnet-4.6 -&gt; deepseek-v4-flash</code>.</p>
+    </section>
+
+    <section>
+      <h2>Troubleshooting</h2>
+      <ul>
+        <li><strong>Logs</strong>: <code>watchdog.log</code> for watchdog actions, <code>proxy-&lt;timestamp&gt;.log</code> for proxy output. Each request prints <code>[provider] original -&gt; mapped</code> or <code>[provider] METHOD /path (no model rewrite)</code>.</li>
+        <li><strong>Port in use</strong>: <code>status.ps1</code> or <code>netstat -ano | findstr 8787</code>.</li>
+        <li><strong>404 Unknown provider</strong>: base URL path prefix is wrong, or the provider is missing from <code>proxy-config.json</code>.</li>
+        <li><strong>Model not rewritten</strong>: log shows <code>(no model rewrite)</code> — the <code>model</code> field in the request body is not in the provider's <code>map</code>.</li>
+        <li><strong>Proxy not auto-starting</strong>: check <code>watchdog.log</code> and confirm the scheduled task <code>ClaudeModelRewriteProxyWatchdog</code> is running via <code>status.ps1</code>.</li>
+      </ul>
     </section>
 
     <section>
@@ -237,8 +313,9 @@
       <h2>Security Notes</h2>
       <ul>
         <li>This is not a system proxy.</li>
-        <li>Only software explicitly configured to use <code>http://127.0.0.1:8787</code> is affected.</li>
+        <li>Only software explicitly configured to use <code>http://127.0.0.1:8787/&lt;provider&gt;/</code> is affected.</li>
         <li>API keys are not stored in this repository.</li>
+        <li>Unknown model names are forwarded unchanged — the proxy never invents a mapping.</li>
         <li>Runtime logs are written to <code>proxy.log</code>, which is ignored by Git.</li>
       </ul>
     </section>

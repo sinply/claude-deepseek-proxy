@@ -4,37 +4,77 @@ Guidance for Claude Code and other coding agents working in this repository.
 
 ## Project Purpose
 
-This project provides a small local HTTP proxy for Claude-3p / Claude Code gateway configurations.
+Local HTTP proxy that lets Claude Code (and other Anthropic-compatible clients) keep using official Claude model names (`claude-sonnet-4.6`, `claude-opus-4.6`) while routing to multiple third-party Anthropic-compatible upstreams.
 
-Claude keeps using Claude-compatible model aliases, while the proxy rewrites those aliases to real DeepSeek model names before forwarding requests to DeepSeek's Anthropic-compatible endpoint.
+The Claude Code client has become stricter and rejects non-official model names in its model list. This proxy keeps the official names on the client side and rewrites them to the real backend model names per provider before forwarding.
+
+A background watchdog syncs the proxy lifecycle to the Claude Code client so the user never has to manually start/stop anything.
+
+## Architecture
+
+### Proxy (`model-rewrite-proxy.cjs`)
+
+Single proxy listens on `http://127.0.0.1:8787`. The first path segment selects the provider:
+
+```text
+/<provider>/<rest>   ->   providers[<provider>].upstream + <rest>
+```
+
+For example:
+
+```text
+POST /deepseek/v1/messages   -> https://api.deepseek.com/anthropic/v1/messages
+POST /ark/v1/messages        -> https://ark.cn-beijing.volces.com/api/coding/v1/messages
+```
+
+Per-provider `map` rewrites the JSON `model` field. Unknown model names pass through unchanged.
+
+`GET /<provider>/v1/models` is intercepted and answered with a synthetic Anthropic-format response built from the provider's map keys. This is required because Claude Code's model discovery rejects upstreams that don't return official Claude model IDs.
+
+### Watchdog (`proxy-watchdog.ps1`)
+
+Hidden background PowerShell process installed as a logon scheduled task. Polls every 5 seconds:
+
+- `Claude.exe` running + proxy down -> start proxy
+- `Claude.exe` gone for 15 seconds -> stop proxy (grace period covers quick restarts and UWP multi-process shutdown chatter)
+
+Singleton guard via named mutex (`Global\ClaudeModelRewriteProxyWatchdog`) prevents duplicate instances. Main loop wrapped in try-catch so transient errors don't kill the watchdog.
+
+## Configuration
+
+`proxy-config.json` (co-located with the proxy script) defines providers. Override path with `PROXY_CONFIG_PATH`.
+
+Default mapping:
+
+```text
+deepseek: claude-sonnet-4.6 -> deepseek-v4-flash, claude-opus-4.6 -> deepseek-v4-pro
+ark:      claude-sonnet-4.6 -> kimi-k2.6,         claude-opus-4.6 -> glm-5.2
+```
+
+## TLS
+
+DeepSeek sends an incomplete certificate chain. Node.js doesn't do AIA fetching like Windows does, so the proxy runs with `NODE_TLS_REJECT_UNAUTHORIZED=0`. This affects only the proxy's outbound TLS to upstreams, not the looptail connection from Claude Code. Both the watchdog and `start-claude-deepseek-proxy.ps1` set this env var.
 
 ## Important Rules
 
-- Do not commit private values, Claude-3p config files, local logs, or machine-specific private data.
-- Do not add the user's `configLibrary` JSON files to this repository.
-- Keep the proxy minimal: it should forward requests and only rewrite the JSON `model` field when it matches a known alias.
-- Preserve Windows PowerShell compatibility.
-- Keep Node.js compatibility conservative; the original environment used Node.js 12.
-
-## Current Mapping
-
-```text
-claude-deepseek-v4-pro   -> deepseek-v4-pro
-cluade-deepseek-v4-pro   -> deepseek-v4-pro
-claude-deepseek-v4-flash -> deepseek-v4-flash
-cluade-deepseek-v4-flash -> deepseek-v4-flash
-```
-
-The `cluade-*` entries intentionally support a common typo.
+- Do not commit private values, Claude Code config files, local logs, or machine-specific private data.
+- Do not commit `proxy-*.log` or `watchdog.log` (they are in `.gitignore`).
+- Do not commit the user's Claude-3p `configLibrary` JSON files.
+- Keep the proxy minimal: forward requests, parse JSON body only to rewrite the `model` field, intercept `/v1/models` synthetically.
+- Preserve Windows PowerShell compatibility for wrapper scripts.
+- Keep Node.js compatibility conservative (the original environment used Node.js 12). Avoid optional chaining, nullish coalescing, and other post-Node-12 syntax in the proxy.
+- Do not reintroduce the legacy `claude-deepseek-v4-*` / `cluade-*` aliases. Only official Claude model names are supported.
 
 ## Files
 
-- `model-rewrite-proxy.cjs`: Local HTTP proxy implementation.
-- `start-claude-deepseek-proxy.ps1`: Starts the proxy as a hidden background process.
-- `install-autostart.ps1`: Installs or repairs the Windows scheduled task.
-- `uninstall-autostart.ps1`: Removes the scheduled task.
-- `status.ps1`: Checks scheduled task and port status.
-- `docs/index.html`: Static HTML usage guide.
+- `model-rewrite-proxy.cjs` — proxy: path routing, model rewrite, `/v1/models` interception.
+- `proxy-config.json` — provider definitions.
+- `proxy-watchdog.ps1` — background watchdog syncing proxy lifecycle to Claude Code.
+- `install-autostart.ps1` / `uninstall-autostart.ps1` — install/remove watchdog scheduled task.
+- `start-claude-deepseek-proxy.ps1` — standalone proxy starter (no watchdog), legacy/manual use.
+- `start-claude.ps1` — wrapper that starts proxy + Claude and stops proxy on Claude exit (alternative to watchdog).
+- `status.ps1` — check task / watchdog / proxy / Claude state.
+- `docs/index.html` — static HTML usage guide.
 
 ## Validation Checklist
 
@@ -42,8 +82,7 @@ Before committing changes:
 
 ```powershell
 node --check .\model-rewrite-proxy.cjs
-rg -n -i "<sensitive-value-patterns>" .
 git status --short
 ```
 
-If the proxy is running locally, a minimal runtime check should confirm that `claude-deepseek-v4-pro` returns `deepseek-v4-pro` from the upstream response.
+Smoke test (any local fake upstream will do): send a POST to `/<provider>/v1/messages` with a body containing `model: "claude-sonnet-4.6"` and confirm the upstream receives the mapped real model name. Also confirm `GET /<provider>/v1/models` returns 200 with a `data` array containing the official Claude model IDs.

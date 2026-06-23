@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$nodeExe = "D:\Program Files\nodejs\node.exe"
+$nodeExe = "C:\Program Files\nodejs\node.exe"
 $proxyScript = Join-Path $PSScriptRoot "model-rewrite-proxy.cjs"
 $logPath = Join-Path $PSScriptRoot "proxy.log"
 $hostName = "127.0.0.1"
@@ -32,9 +32,12 @@ if (Test-PortOpen -HostName $hostName -Port $port) {
   exit 0
 }
 
-$env:UPSTREAM_BASE_URL = "https://api.deepseek.com/anthropic"
+$env:PROXY_CONFIG_PATH = Join-Path $PSScriptRoot "proxy-config.json"
 $env:LISTEN_HOST = $hostName
 $env:LISTEN_PORT = [string]$port
+# DeepSeek sends an incomplete cert chain; Node.js doesn't do AIA fetching like Windows does.
+# Skip TLS verification for upstream connections. Only affects this local proxy process.
+$env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
 
 $process = Start-Process `
   -FilePath $nodeExe `
