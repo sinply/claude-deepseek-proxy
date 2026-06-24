@@ -1,6 +1,9 @@
 $ErrorActionPreference = "Stop"
 
-$configPath = Join-Path $PSScriptRoot "proxy-config.json"
+# Project layout: src/ has the proxy script, config/ has JSON config,
+# logs/ holds all log files. scripts/ only holds PowerShell entry points.
+$rootDir    = Split-Path $PSScriptRoot -Parent
+$configPath = Join-Path $rootDir "config\proxy-config.json"
 $nodeExe = $null
 if (Test-Path $configPath) {
   try {
@@ -14,8 +17,10 @@ if (-not $nodeExe) {
   }
 }
 if (-not $nodeExe) { throw "node.exe not found (set nodePath in proxy-config.json)" }
-$proxyScript = Join-Path $PSScriptRoot "model-rewrite-proxy.cjs"
-$logPath = Join-Path $PSScriptRoot "proxy.log"
+$proxyScript = Join-Path $rootDir "src\model-rewrite-proxy.cjs"
+$logsDir = Join-Path $rootDir "logs"
+if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
+$logPath = Join-Path $logsDir "proxy.log"
 $hostName = "127.0.0.1"
 $port = 8787
 
@@ -45,7 +50,7 @@ if (Test-PortOpen -HostName $hostName -Port $port) {
   exit 0
 }
 
-$env:PROXY_CONFIG_PATH = Join-Path $PSScriptRoot "proxy-config.json"
+$env:PROXY_CONFIG_PATH = Join-Path $rootDir "config\proxy-config.json"
 $env:LISTEN_HOST = $hostName
 $env:LISTEN_PORT = [string]$port
 # DeepSeek sends an incomplete cert chain; Node.js doesn't do AIA fetching like Windows does.
@@ -55,7 +60,7 @@ $env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
 $process = Start-Process `
   -FilePath $nodeExe `
   -ArgumentList "`"$proxyScript`"" `
-  -WorkingDirectory $PSScriptRoot `
+  -WorkingDirectory $rootDir `
   -WindowStyle Hidden `
   -RedirectStandardError $logPath `
   -PassThru

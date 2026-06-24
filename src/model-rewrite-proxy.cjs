@@ -9,7 +9,7 @@ const listenPort = Number(process.env.LISTEN_PORT || 8787);
 
 const configPath =
   process.env.PROXY_CONFIG_PATH ||
-  path.join(__dirname, "proxy-config.json");
+  path.join(__dirname, "..", "config", "proxy-config.json");
 
 if (!fs.existsSync(configPath)) {
   console.error("Missing proxy config: " + configPath);

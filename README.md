@@ -6,7 +6,7 @@ The Claude Code client has become stricter and requires real `claude-*` model na
 
 A watchdog keeps the proxy in sync with the Claude Code client: proxy starts when Claude runs, stops shortly after Claude exits. No manual management.
 
-## Mapping (default `proxy-config.json`)
+## Mapping (default `config/proxy-config.json`)
 
 ```text
 # deepseek provider
@@ -15,7 +15,8 @@ claude-opus-4.6  -> deepseek-v4-pro
 
 # ark provider (Volcengine Ark code plan)
 claude-sonnet-4.6 -> kimi-k2.7-code
-claude-opus-4.6  -> glm-5.2
+claude-opus-4.6  -> doubao-seed-2.0-pro
+claude-opus-4.7  -> glm-5.2
 ```
 
 The same Claude model name maps to different real models depending on which provider you point at.
@@ -35,7 +36,7 @@ Set the Claude Code base URL to one of those (including the trailing slash). The
 
 ## Watchdog (auto start/stop with Claude Code)
 
-`proxy-watchdog.ps1` runs as a hidden background process (installed via `install-autostart.ps1` as a logon scheduled task). Every 5 seconds it polls for `Claude.exe`:
+`scripts/proxy-watchdog.ps1` runs as a hidden background process (installed via `scripts/install-autostart.ps1` as a logon scheduled task). Every 5 seconds it polls for `Claude.exe`:
 
 - Claude running + proxy down -> start proxy
 - Claude gone for 15 seconds -> stop proxy
@@ -49,7 +50,7 @@ Singleton guard via named mutex prevents duplicate watchdog instances.
 ### 1. Install the watchdog (one-time)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\install-autostart.ps1
 ```
 
 This installs a logon scheduled task `ClaudeModelRewriteProxyWatchdog` and starts it immediately. The watchdog then runs whenever you are logged in.
@@ -68,7 +69,8 @@ Keep the official Claude model names in the model list:
 ```json
 [
   { "name": "claude-sonnet-4.6" },
-  { "name": "claude-opus-4.6" }
+  { "name": "claude-opus-4.6" },
+  { "name": "claude-opus-4.7" }
 ]
 ```
 
@@ -81,21 +83,21 @@ Start Claude Code however you normally do. The watchdog detects it within 5 seco
 ### 4. Verify
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\status.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\status.ps1
 ```
 
-Or check logs directly:
+Or just double-click `bat\status.bat`. Or check logs directly:
 
 ```powershell
-Get-Content .\watchdog.log -Tail 10
-Get-Content .\proxy-*.log -Tail 10
+Get-Content .\logs\watchdog.log -Tail 10
+Get-Content .\logs\proxy-*.log -Tail 10
 ```
 
 Each request logs `[provider] original -> mapped`, e.g. `[deepseek] claude-sonnet-4.6 -> deepseek-v4-flash`.
 
 ## Configuration File
 
-`proxy-config.json` (next to `model-rewrite-proxy.cjs`) defines providers:
+`config/proxy-config.json` defines providers:
 
 ```json
 {
@@ -112,7 +114,8 @@ Each request logs `[provider] original -> mapped`, e.g. `[deepseek] claude-sonne
       "upstream": "https://ark.cn-beijing.volces.com/api/coding",
       "map": {
         "claude-sonnet-4.6": "kimi-k2.7-code",
-        "claude-opus-4.6":  "glm-5.2"
+        "claude-opus-4.6":  "doubao-seed-2.0-pro",
+        "claude-opus-4.7":  "glm-5.2"
       }
     }
   }
@@ -121,7 +124,7 @@ Each request logs `[provider] original -> mapped`, e.g. `[deepseek] claude-sonne
 
 ### `nodePath` (optional)
 
-Absolute path to `node.exe`. All PowerShell scripts (`proxy-watchdog.ps1`, `start-claude-deepseek-proxy.ps1`, `start-claude.ps1`) read this field to launch the proxy. If unset or the path does not exist, they fall back to auto-detection in this order: `C:\Program Files\nodejs\node.exe`, `D:\Program Files\nodejs\node.exe`, then `node.exe` on `PATH`.
+Absolute path to `node.exe`. All PowerShell scripts (`scripts/proxy-watchdog.ps1`, `scripts/start-claude-deepseek-proxy.ps1`, `scripts/start-claude.ps1`) read this field to launch the proxy. If unset or the path does not exist, they fall back to auto-detection in this order: `C:\Program Files\nodejs\node.exe`, `D:\Program Files\nodejs\node.exe`, then `node.exe` on `PATH`.
 
 Set this when Node.js is installed in a non-standard location to avoid hard-coding paths in scripts.
 
@@ -131,16 +134,16 @@ To add a new provider: add an entry under `providers`, then point Claude Code at
 
 ## Modifying the Model Mapping
 
-To change which real model a Claude name maps to, edit `proxy-config.json`:
+To change which real model a Claude name maps to, edit `config/proxy-config.json`:
 
-1. Open `proxy-config.json`.
+1. Open `config/proxy-config.json`.
 2. Under the desired `providers.<name>.map`, change the value for the official Claude model name.
    - Keys (`claude-sonnet-4.6`, `claude-opus-4.6`) are the names Claude Code sees and sends.
    - Values are the real model IDs the upstream provider expects.
 3. Save the file.
 4. Restart the proxy so the new config is loaded:
-   - If the watchdog is running: stop the proxy process; the watchdog will restart it within a few seconds.
-   - If running manually: stop the current `node` process and run `start-claude-deepseek-proxy.ps1` again.
+   - If the watchdog is running: stop the proxy process (or run `bat\stop.bat` then `bat\restart-wd.bat`); the watchdog will restart it within a few seconds.
+   - If running manually: stop the current `node` process and run `scripts\start-claude-deepseek-proxy.ps1` again.
 5. Optional: if you use Claude-3p, update the `labelOverride` field in the matching configLibrary entry so the UI label matches the new model.
 
 You can also add new providers or new Claude-name-to-real-model mappings. Each provider's `/v1/models` response is generated automatically from its map keys, so Claude Code will see any new official Claude names immediately after restart.
@@ -153,34 +156,52 @@ DeepSeek's server sends an incomplete certificate chain. Node.js (unlike Windows
 
 ```powershell
 # Install watchdog (auto-start at logon)
-powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\install-autostart.ps1
 
 # Status
-powershell -ExecutionPolicy Bypass -File .\status.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\status.ps1
 
 # Uninstall (stops watchdog, kills proxy, removes task)
-powershell -ExecutionPolicy Bypass -File .\uninstall-autostart.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-autostart.ps1
 
 # Start proxy manually without watchdog (legacy)
-powershell -ExecutionPolicy Bypass -File .\start-claude-deepseek-proxy.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\start-claude-deepseek-proxy.ps1
 ```
+
+Or use the convenience launchers in `bat\`:
+
+| Batch file | Action |
+|---|---|
+| `bat\start.bat` | Start the proxy (no watchdog) |
+| `bat\stop.bat` | Stop proxy + watchdog processes |
+| `bat\status.bat` | Show proxy + watchdog status and model list |
+| `bat\restart-wd.bat` | Restart the watchdog scheduled task |
 
 ## Files
 
-- `model-rewrite-proxy.cjs` — proxy implementation: path-routed, per-provider model rewrite, `/v1/models` interception.
-- `proxy-config.json` — provider definitions (upstream URL + model map).
-- `proxy-watchdog.ps1` — background watchdog that syncs proxy lifecycle to Claude Code.
-- `install-autostart.ps1` / `uninstall-autostart.ps1` — install/remove the watchdog scheduled task.
-- `start-claude-deepseek-proxy.ps1` — standalone proxy starter (no watchdog), kept for manual use.
-- `start-claude.ps1` — alternative wrapper that starts proxy + Claude and stops proxy on Claude exit.
-- `status.ps1` — check task / watchdog / proxy / Claude state.
+```
+src/model-rewrite-proxy.cjs              proxy implementation: routing, model rewrite, /v1/models interception
+config/proxy-config.json                 provider definitions (upstream URL + model map)
+scripts/proxy-watchdog.ps1               background watchdog syncing proxy lifecycle to Claude Code
+scripts/install-autostart.ps1            install the watchdog scheduled task
+scripts/uninstall-autostart.ps1          remove the watchdog scheduled task
+scripts/start-claude-deepseek-proxy.ps1  standalone proxy starter (no watchdog), manual use
+scripts/start-claude.ps1                 wrapper: starts proxy + Claude, stops proxy on Claude exit
+scripts/status.ps1                       check task / watchdog / proxy / Claude state
+bat/start.bat                            start the proxy
+bat/stop.bat                             stop proxy + watchdog
+bat/status.bat                           show proxy + watchdog status and model list
+bat/restart-wd.bat                       restart the watchdog scheduled task
+logs/                                    all proxy and watchdog logs (gitignored)
+docs/index.html                          static HTML usage guide
+```
 
 ## Notes
 
 - This is not a system proxy.
 - Only software explicitly configured to use `http://127.0.0.1:8787/<provider>/` is affected.
 - Unknown model names are forwarded unchanged (no rewrite). The proxy never invents a mapping.
-- Logs: `watchdog.log` for watchdog actions, `proxy-<timestamp>.log` per proxy start for proxy output. All ignored by Git.
+- Logs: `logs/watchdog.log` for watchdog actions, `logs/proxy-<timestamp>.log` per proxy start for proxy output. All ignored by Git.
 
 ## License
 

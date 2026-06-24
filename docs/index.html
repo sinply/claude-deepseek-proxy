@@ -179,7 +179,7 @@
     </section>
 
     <section>
-      <h2>Model Mapping (default <code>proxy-config.json</code>)</h2>
+      <h2>Model Mapping (default <code>config/proxy-config.json</code>)</h2>
       <table>
         <thead>
           <tr>
@@ -201,13 +201,17 @@
             <td><code>deepseek-v4-pro</code></td>
           </tr>
           <tr>
-            <td rowspan="2"><code>ark</code></td>
-            <td rowspan="2"><code>https://ark.cn-beijing.volces.com/api/coding</code></td>
+            <td rowspan="3"><code>ark</code></td>
+            <td rowspan="3"><code>https://ark.cn-beijing.volces.com/api/coding</code></td>
             <td><code>claude-sonnet-4.6</code></td>
-            <td><code>kimi-k2.6</code></td>
+            <td><code>kimi-k2.7-code</code></td>
           </tr>
           <tr>
             <td><code>claude-opus-4.6</code></td>
+            <td><code>doubao-seed-2.0-pro</code></td>
+          </tr>
+          <tr>
+            <td><code>claude-opus-4.7</code></td>
             <td><code>glm-5.2</code></td>
           </tr>
         </tbody>
@@ -236,14 +240,15 @@ claude</code></pre>
       <p>Keep the official Claude model names in the Claude Code model list:</p>
       <pre><code>[
   { "name": "claude-sonnet-4.6" },
-  { "name": "claude-opus-4.6" }
+  { "name": "claude-opus-4.6" },
+  { "name": "claude-opus-4.7" }
 ]</code></pre>
       <div class="note">Switching providers does not require restarting the proxy — just change the path prefix in <code>ANTHROPIC_BASE_URL</code>.</div>
     </section>
 
     <section>
       <h2>Configuration File</h2>
-      <p><code>proxy-config.json</code> (next to <code>model-rewrite-proxy.cjs</code>) defines providers:</p>
+      <p><code>config/proxy-config.json</code> defines providers:</p>
       <pre><code>{
   "providers": {
     "deepseek": {
@@ -256,8 +261,9 @@ claude</code></pre>
     "ark": {
       "upstream": "https://ark.cn-beijing.volces.com/api/coding",
       "map": {
-        "claude-sonnet-4.6": "kimi-k2.6",
-        "claude-opus-4.6":  "glm-5.2"
+        "claude-sonnet-4.6": "kimi-k2.7-code",
+        "claude-opus-4.6":  "doubao-seed-2.0-pro",
+        "claude-opus-4.7":  "glm-5.2"
       }
     }
   }
@@ -268,13 +274,13 @@ claude</code></pre>
     <section>
       <h2>Watchdog (auto start/stop)</h2>
       <p>Install the watchdog as a logon scheduled task (one-time):</p>
-      <pre><code>powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1</code></pre>
+      <pre><code>powershell -ExecutionPolicy Bypass -File .\scripts\install-autostart.ps1</code></pre>
       <p>The watchdog runs hidden in the background. It starts the proxy when Claude Code launches and stops it 15 seconds after Claude Code exits. Singleton guard via named mutex prevents duplicates.</p>
       <p>Check status:</p>
-      <pre><code>powershell -ExecutionPolicy Bypass -File .\status.ps1</code></pre>
+      <pre><code>powershell -ExecutionPolicy Bypass -File .\scripts\status.ps1</code></pre>
       <p>Uninstall (stops watchdog, kills proxy, removes task):</p>
-      <pre><code>powershell -ExecutionPolicy Bypass -File .\uninstall-autostart.ps1</code></pre>
-      <div class="note">You can also start the proxy manually with <code>start-claude-deepseek-proxy.ps1</code> (legacy, no watchdog) or use <code>start-claude.ps1</code> as a wrapper that stops the proxy when Claude exits.</div>
+      <pre><code>powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-autostart.ps1</code></pre>
+      <div class="note">You can also start the proxy manually with <code>scripts/start-claude-deepseek-proxy.ps1</code> (legacy, no watchdog) or use <code>scripts/start-claude.ps1</code> as a wrapper that stops the proxy when Claude exits.</div>
     </section>
 
     <section>
@@ -284,28 +290,28 @@ claude</code></pre>
   -H "content-type: application/json" `
   -H "x-api-key: $env:ANTHROPIC_API_KEY" `
   -d '{\"model\":\"claude-sonnet-4.6\",\"max_tokens\":16,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}'</code></pre>
-      <p>Check <code>proxy.log</code> — each request logs <code>[provider] original -&gt; mapped</code>, e.g. <code>[deepseek] claude-sonnet-4.6 -&gt; deepseek-v4-flash</code>.</p>
+      <p>Check <code>logs/proxy.log</code> — each request logs <code>[provider] original -&gt; mapped</code>, e.g. <code>[deepseek] claude-sonnet-4.6 -&gt; deepseek-v4-flash</code>.</p>
     </section>
 
     <section>
       <h2>Troubleshooting</h2>
       <ul>
-        <li><strong>Logs</strong>: <code>watchdog.log</code> for watchdog actions, <code>proxy-&lt;timestamp&gt;.log</code> for proxy output. Each request prints <code>[provider] original -&gt; mapped</code> or <code>[provider] METHOD /path (no model rewrite)</code>.</li>
-        <li><strong>Port in use</strong>: <code>status.ps1</code> or <code>netstat -ano | findstr 8787</code>.</li>
-        <li><strong>404 Unknown provider</strong>: base URL path prefix is wrong, or the provider is missing from <code>proxy-config.json</code>.</li>
+        <li><strong>Logs</strong>: <code>logs/watchdog.log</code> for watchdog actions, <code>logs/proxy-&lt;timestamp&gt;.log</code> for proxy output. Each request prints <code>[provider] original -&gt; mapped</code> or <code>[provider] METHOD /path (no model rewrite)</code>.</li>
+        <li><strong>Port in use</strong>: <code>scripts/status.ps1</code> or <code>netstat -ano | findstr 8787</code>.</li>
+        <li><strong>404 Unknown provider</strong>: base URL path prefix is wrong, or the provider is missing from <code>config/proxy-config.json</code>.</li>
         <li><strong>Model not rewritten</strong>: log shows <code>(no model rewrite)</code> — the <code>model</code> field in the request body is not in the provider's <code>map</code>.</li>
-        <li><strong>Proxy not auto-starting</strong>: check <code>watchdog.log</code> and confirm the scheduled task <code>ClaudeModelRewriteProxyWatchdog</code> is running via <code>status.ps1</code>.</li>
+        <li><strong>Proxy not auto-starting</strong>: check <code>logs/watchdog.log</code> and confirm the scheduled task <code>ClaudeModelRewriteProxyWatchdog</code> is running via <code>scripts/status.ps1</code>.</li>
       </ul>
     </section>
 
     <section>
       <h2>Autostart</h2>
       <p>Install or repair the Windows scheduled task:</p>
-      <pre><code>powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1</code></pre>
+      <pre><code>powershell -ExecutionPolicy Bypass -File .\scripts\install-autostart.ps1</code></pre>
       <p>Check status:</p>
-      <pre><code>powershell -ExecutionPolicy Bypass -File .\status.ps1</code></pre>
+      <pre><code>powershell -ExecutionPolicy Bypass -File .\scripts\status.ps1</code></pre>
       <p>Remove autostart:</p>
-      <pre><code>powershell -ExecutionPolicy Bypass -File .\uninstall-autostart.ps1</code></pre>
+      <pre><code>powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-autostart.ps1</code></pre>
       <div class="note">The scheduled task may show <code>Ready</code> after it runs. That is expected because the task starts the hidden Node proxy and exits.</div>
     </section>
 
@@ -316,7 +322,7 @@ claude</code></pre>
         <li>Only software explicitly configured to use <code>http://127.0.0.1:8787/&lt;provider&gt;/</code> is affected.</li>
         <li>API keys are not stored in this repository.</li>
         <li>Unknown model names are forwarded unchanged — the proxy never invents a mapping.</li>
-        <li>Runtime logs are written to <code>proxy.log</code>, which is ignored by Git.</li>
+        <li>Runtime logs are written to <code>logs/proxy.log</code>, which is ignored by Git.</li>
       </ul>
     </section>
   </main>

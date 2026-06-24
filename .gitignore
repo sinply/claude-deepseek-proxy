@@ -1,6 +1,4 @@
-proxy.log
-proxy-*.log
-watchdog.log
+logs/
 *.bak
 *.tmp
 node_modules/
