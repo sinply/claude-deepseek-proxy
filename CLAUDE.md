@@ -73,6 +73,7 @@ DeepSeek sends an incomplete certificate chain. Node.js doesn't do AIA fetching 
 src/model-rewrite-proxy.cjs        proxy: path routing, model rewrite, /v1/models interception
 config/proxy-config.json           provider definitions
 scripts/proxy-watchdog.ps1         background watchdog syncing proxy lifecycle to Claude Code
+scripts/launch-watchdog.vbs        hidden launcher for the watchdog — wscript runs with no console, so the spawned powershell inherits none and Windows Terminal is never pulled in as a ConPTY host (avoids the stray -Embedding WT window that Task Scheduler's -WindowStyle Hidden would otherwise create)
 scripts/install-autostart.ps1      install watchdog scheduled task
 scripts/uninstall-autostart.ps1    remove watchdog scheduled task
 scripts/start-claude-deepseek-proxy.ps1  standalone proxy starter (no watchdog), manual use

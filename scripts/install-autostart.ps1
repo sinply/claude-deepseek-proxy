@@ -6,7 +6,8 @@ $ErrorActionPreference = "Stop"
 
 $taskName = "ClaudeModelRewriteProxyWatchdog"
 $scriptPath = Join-Path $PSScriptRoot "proxy-watchdog.ps1"
-$powerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$vbsPath   = Join-Path $PSScriptRoot "launch-watchdog.vbs"
+$wscript   = "$env:SystemRoot\System32\wscript.exe"
 
 # Stop and remove any legacy proxy-autostart task (old name) so we don't run both.
 Get-ScheduledTask -TaskName "ClaudeDeepSeekModelRewriteProxy" -ErrorAction SilentlyContinue |
@@ -16,9 +17,14 @@ Get-ScheduledTask -TaskName "ClaudeDeepSeekModelRewriteProxy" -ErrorAction Silen
     Write-Host "Removed legacy task: $($_.TaskName)"
   }
 
+# Launch via wscript + a VBS launcher instead of powershell -WindowStyle Hidden directly.
+# Task Scheduler with -WindowStyle Hidden allocates a console for the powershell, and
+# on systems with Windows Terminal installed ConPTY pulls WT in as the host, leaving a
+# stray -Embedding WT window. wscript runs with no console, so the spawned powershell
+# inherits none and no WT window is created.
 $action = New-ScheduledTaskAction `
-  -Execute $powerShell `
-  -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`""
+  -Execute $wscript `
+  -Argument "//nologo `"$vbsPath`""
 
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited

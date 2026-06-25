@@ -20,7 +20,9 @@ if (-not $nodeExe) { throw "node.exe not found (set nodePath in proxy-config.jso
 $proxyScript = Join-Path $rootDir "src\model-rewrite-proxy.cjs"
 $logsDir = Join-Path $rootDir "logs"
 if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
-$logPath = Join-Path $logsDir "proxy.log"
+$logPath = Join-Path $logsDir ("proxy-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
+# Status messages go to a separate file so they never collide with node's stderr handle on $logPath.
+$statusLog = Join-Path $logsDir "proxy-start.log"
 $hostName = "127.0.0.1"
 $port = 8787
 
@@ -46,7 +48,7 @@ function Test-PortOpen {
 }
 
 if (Test-PortOpen -HostName $hostName -Port $port) {
-  "$(Get-Date -Format s) proxy already listening on ${hostName}:${port}" | Add-Content -LiteralPath $logPath
+  "$(Get-Date -Format s) proxy already listening on ${hostName}:${port}" | Add-Content -LiteralPath $statusLog
   exit 0
 }
 
@@ -65,4 +67,4 @@ $process = Start-Process `
   -RedirectStandardError $logPath `
   -PassThru
 
-"$(Get-Date -Format s) started proxy pid=$($process.Id) on ${hostName}:${port}" | Add-Content -LiteralPath $logPath
+"$(Get-Date -Format s) started proxy pid=$($process.Id) on ${hostName}:${port}" | Add-Content -LiteralPath $statusLog

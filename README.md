@@ -45,6 +45,8 @@ This means you launch Claude Code normally (Start menu, shortcut, etc.) and the 
 
 Singleton guard via named mutex prevents duplicate watchdog instances.
 
+The scheduled task launches the watchdog through `scripts/launch-watchdog.vbs` (via `wscript.exe`) rather than calling `powershell.exe -WindowStyle Hidden` directly. Task Scheduler with `-WindowStyle Hidden` still allocates a console for the powershell, and on systems with Windows Terminal installed ConPTY pulls WT in as the host, leaving a stray `-Embedding` Windows Terminal window. `wscript` runs with no console, so the spawned powershell inherits none and no WT window is created.
+
 ## Usage
 
 ### 1. Install the watchdog (one-time)
@@ -183,6 +185,7 @@ Or use the convenience launchers in `bat\`:
 src/model-rewrite-proxy.cjs              proxy implementation: routing, model rewrite, /v1/models interception
 config/proxy-config.json                 provider definitions (upstream URL + model map)
 scripts/proxy-watchdog.ps1               background watchdog syncing proxy lifecycle to Claude Code
+scripts/launch-watchdog.vbs              hidden launcher for the watchdog — wscript runs with no console so Windows Terminal is never pulled in as a ConPTY host
 scripts/install-autostart.ps1            install the watchdog scheduled task
 scripts/uninstall-autostart.ps1          remove the watchdog scheduled task
 scripts/start-claude-deepseek-proxy.ps1  standalone proxy starter (no watchdog), manual use

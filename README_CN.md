@@ -45,6 +45,8 @@ http://127.0.0.1:8787/ark/        -> https://ark.cn-beijing.volces.com/api/codin
 
 通过命名互斥锁（mutex）保证只有一个看门狗实例在运行。
 
+计划任务通过 `scripts/launch-watchdog.vbs`（由 `wscript.exe` 调用）启动看门狗，而非直接调用 `powershell.exe -WindowStyle Hidden`。任务调度器用 `-WindowStyle Hidden` 启动 powershell 时仍会为它分配控制台，在装了 Windows Terminal 的系统上 ConPTY 会把 WT 拉来当宿主，留下一个多余的 `-Embedding` Windows Terminal 窗口。`wscript` 自身无控制台，被它启动的 powershell 继承不到控制台，也就不会触发 WT 窗口。
+
 ## 使用方法
 
 ### 1. 安装看门狗（一次性）
@@ -183,6 +185,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-claude-deepseek-proxy.p
 src/model-rewrite-proxy.cjs              代理实现：按 provider 路由、模型名重写、/v1/models 拦截
 config/proxy-config.json                 provider 定义（上游 URL + 模型映射）
 scripts/proxy-watchdog.ps1               后台看门狗，同步代理与 Claude Code 的生命周期
+scripts/launch-watchdog.vbs              看门狗的隐藏启动器——wscript 自身无控制台，不会触发 Windows Terminal 作为 ConPTY 宿主被拉起
 scripts/install-autostart.ps1            安装看门狗计划任务
 scripts/uninstall-autostart.ps1          卸载看门狗计划任务
 scripts/start-claude-deepseek-proxy.ps1  独立启动代理（无看门狗），手动使用
