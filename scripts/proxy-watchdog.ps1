@@ -90,6 +90,17 @@ function Start-Proxy {
   # with the watchdog's own log writes.
   $proxyLogFile = Join-Path $logsDir ("proxy-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
 
+  # Best-effort: sync model map from Claude-3p configLibrary -> proxy-config.json.
+  # Non-fatal: on failure the proxy starts with whatever config is already on disk.
+  $syncScript = Join-Path $rootDir "scripts\sync-models.cjs"
+  $syncLog = Join-Path $logsDir "sync-models.log"
+  try {
+    "$(Get-Date -Format s) --- sync run ---" | Add-Content -LiteralPath $syncLog
+    & $nodeExe $syncScript *>> $syncLog
+  } catch {
+    "$(Get-Date -Format s) sync error: $($_.Exception.Message)" | Add-Content -LiteralPath $syncLog
+  }
+
   try {
     $proc = Start-Process `
       -FilePath $nodeExe `

@@ -1,19 +1,21 @@
 {
-  "nodePath": "C:\\Program Files\\nodejs\\node.exe",
+  "nodePath": "D:\\Program Files\\nodejs\\node.exe",
   "providers": {
     "deepseek": {
       "upstream": "https://api.deepseek.com/anthropic",
       "map": {
-        "claude-sonnet-4.6": "deepseek-v4-flash",
-        "claude-opus-4.6": "deepseek-v4-pro"
+        "claude-opus-4.6": "deepseek-v4-pro",
+        "claude-sonnet-4.6": "deepseek-v4-flash"
       }
     },
     "ark": {
       "upstream": "https://ark.cn-beijing.volces.com/api/coding",
       "map": {
-        "claude-sonnet-4.6": "kimi-k2.7-code",
-        "claude-opus-4.6": "doubao-seed-2.0-pro",
-        "claude-opus-4.7": "glm-5.2"
+        "claude-opus-4.8": "deepseek-v4-pro",
+        "claude-sonnet-5": "deepseek-v4-flash",
+        "claude-opus-4.7": "glm-5.2",
+        "claude-opus-4.6": "kimi-k2.7-code",
+        "claude-opus-4.5": "doubao-seed-2.1-turbo"
       }
     }
   }

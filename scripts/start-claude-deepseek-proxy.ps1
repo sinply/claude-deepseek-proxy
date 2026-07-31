@@ -59,6 +59,17 @@ $env:LISTEN_PORT = [string]$port
 # Skip TLS verification for upstream connections. Only affects this local proxy process.
 $env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
 
+# Best-effort: sync model map from Claude-3p configLibrary -> proxy-config.json.
+# Non-fatal: on failure the proxy starts with whatever config is already on disk.
+$syncScript = Join-Path $rootDir "scripts\sync-models.cjs"
+$syncLog = Join-Path $logsDir "sync-models.log"
+try {
+  "$(Get-Date -Format s) --- sync run ---" | Add-Content -LiteralPath $syncLog
+  & $nodeExe $syncScript *>> $syncLog
+} catch {
+  "$(Get-Date -Format s) sync error: $($_.Exception.Message)" | Add-Content -LiteralPath $syncLog
+}
+
 $process = Start-Process `
   -FilePath $nodeExe `
   -ArgumentList "`"$proxyScript`"" `

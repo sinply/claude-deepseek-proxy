@@ -10,13 +10,15 @@ Claude Code 客户端已变得更加严格，要求模型列表中必须是真�
 
 ```text
 # deepseek provider
-claude-sonnet-4.6 -> deepseek-v4-flash
 claude-opus-4.6  -> deepseek-v4-pro
+claude-sonnet-4.6 -> deepseek-v4-flash
 
 # ark provider（火山引擎 Ark code plan）
-claude-sonnet-4.6 -> kimi-k2.7-code
-claude-opus-4.6  -> doubao-seed-2.0-pro
+claude-opus-4.8  -> deepseek-v4-pro
+claude-sonnet-5  -> deepseek-v4-flash
 claude-opus-4.7  -> glm-5.2
+claude-opus-4.6  -> kimi-k2.7-code
+claude-opus-4.5  -> doubao-seed-2.1-turbo
 ```
 
 同一个 Claude 模型名在不同 provider 会映射到不同的真实模型。
@@ -108,16 +110,18 @@ Get-Content .\logs\proxy-*.log -Tail 10
     "deepseek": {
       "upstream": "https://api.deepseek.com/anthropic",
       "map": {
-        "claude-sonnet-4.6": "deepseek-v4-flash",
-        "claude-opus-4.6":  "deepseek-v4-pro"
+        "claude-opus-4.6":  "deepseek-v4-pro",
+        "claude-sonnet-4.6": "deepseek-v4-flash"
       }
     },
     "ark": {
       "upstream": "https://ark.cn-beijing.volces.com/api/coding",
       "map": {
-        "claude-sonnet-4.6": "kimi-k2.7-code",
-        "claude-opus-4.6":  "doubao-seed-2.0-pro",
-        "claude-opus-4.7":  "glm-5.2"
+        "claude-opus-4.8":  "deepseek-v4-pro",
+        "claude-sonnet-5":  "deepseek-v4-flash",
+        "claude-opus-4.7":  "glm-5.2",
+        "claude-opus-4.6":  "kimi-k2.7-code",
+        "claude-opus-4.5":  "doubao-seed-2.1-turbo"
       }
     }
   }
@@ -134,21 +138,33 @@ Get-Content .\logs\proxy-*.log -Tail 10
 
 新增 provider：在 `providers` 下添加条目，然后将 Claude Code 指向 `http://127.0.0.1:8787/<name>/`。`/v1/models` 响应会自动根据该 provider 的 map keys 生成。
 
-## 如何修改模型映射
+## 如何新增/修改模型映射
 
-要修改某个 Claude 名对应的真实模型，编辑 `config/proxy-config.json`：
+`config/proxy-config.json` 中的模型映射会在代理启动时**自动同步**自 Claude-3p 的 `configLibrary`（由 `scripts/sync-models.cjs` 完成）。configLibrary 是唯一的数据源：每个 provider 的 `inferenceModels` 条目将官方 Claude ID（`name`）与后端模型（`labelOverride`）配对，这些配对会被写入代理的 `map`。
 
-1. 打开 `config/proxy-config.json`。
-2. 在目标 `providers.<name>.map` 下，修改官方 Claude 模型名对应的值。
-   - Key（如 `claude-sonnet-4.6`、`claude-opus-4.6`）是 Claude Code 看到并发送的名称。
-   - Value 是上游 provider 期望的真实模型 ID。
-3. 保存文件。
-4. 重启代理以加载新配置：
-   - 如果看门狗正在运行：结束代理进程（或运行 `bat\stop.bat` 再 `bat\restart-wd.bat`），看门狗会在几秒内重新拉起它。
-   - 如果手动运行：结束当前 `node` 进程，然后重新运行 `scripts\start-claude-deepseek-proxy.ps1`。
-5. 可选：如果你使用 Claude-3p，同步更新对应 configLibrary 条目中的 `labelOverride` 字段，让 UI 显示标签与真实模型一致。
+### 如果你使用 Claude-3p（推荐）
 
-你也可以新增 provider 或新增 Claude 名到真实模型的映射。每个 provider 的 `/v1/models` 响应都会根据 map keys 自动生成，因此 Claude Code 在代理重启后会立即看到新的官方 Claude 模型名。
+1. 打开该 provider 的 configLibrary 文件，如 `%LOCALAPPDATA%\Claude-3p\configLibrary\<id>.json`（各 provider 对应的 `<id>` 见同目录下的 `_meta.json`）。
+2. 新增或修改一条 `inferenceModels` 条目：
+   ```json
+   { "name": "claude-opus-4.8", "labelOverride": "deepseek-v4-pro", "supports1m": true }
+   ```
+   - `name` — Claude Code 看到并发送的官方 Claude 模型 ID。
+   - `labelOverride` — 上游期望的真实后端模型 ID。
+3. 重启代理，让同步执行并加载新配置：
+   ```powershell
+   bat\restart-wd.bat
+   ```
+
+**不要**手动编辑 `proxy-config.json` 中已有 configLibrary 条目的 provider 的 `map`——sync 会在下次重启时覆盖。
+
+### 如果你不使用 Claude-3p
+
+直接编辑 `config/proxy-config.json` 中 `providers.<name>.map` 下的内容，然后重启代理。sync 只触及在 configLibrary 中有匹配条目的 provider，没有 configLibrary 条目的 provider 保留手工编辑的 map。
+
+### configLibrary 路径
+
+`scripts/sync-models.cjs` 按以下优先级解析 configLibrary 路径：`CONFIG_LIBRARY_PATH` 环境变量，其次 `%LOCALAPPDATA%\Claude-3p\configLibrary`。如果未找到，sync 静默退出并保持 `proxy-config.json` 不变。sync 是尽力而为且非致命的——失败时会记录到 `logs/sync-models.log`，代理以当前磁盘上的配置启动。
 
 ## TLS 说明
 
@@ -190,6 +206,7 @@ scripts/install-autostart.ps1            安装看门狗计划任务
 scripts/uninstall-autostart.ps1          卸载看门狗计划任务
 scripts/start-claude-deepseek-proxy.ps1  独立启动代理（无看门狗），手动使用
 scripts/start-claude.ps1                 包装脚本：启动代理 + Claude，Claude 退出时停止代理
+scripts/sync-models.cjs                 从 Claude-3p configLibrary 同步 provider `map` 到 proxy-config.json（代理启动时自动执行）
 scripts/status.ps1                       查看计划任务 / 看门狗 / 代理 / Claude 状态
 bat/start.bat                            启动代理
 bat/stop.bat                             停止代理 + 看门狗

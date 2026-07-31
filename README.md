@@ -10,13 +10,15 @@ A watchdog keeps the proxy in sync with the Claude Code client: proxy starts whe
 
 ```text
 # deepseek provider
-claude-sonnet-4.6 -> deepseek-v4-flash
 claude-opus-4.6  -> deepseek-v4-pro
+claude-sonnet-4.6 -> deepseek-v4-flash
 
 # ark provider (Volcengine Ark code plan)
-claude-sonnet-4.6 -> kimi-k2.7-code
-claude-opus-4.6  -> doubao-seed-2.0-pro
+claude-opus-4.8  -> deepseek-v4-pro
+claude-sonnet-5  -> deepseek-v4-flash
 claude-opus-4.7  -> glm-5.2
+claude-opus-4.6  -> kimi-k2.7-code
+claude-opus-4.5  -> doubao-seed-2.1-turbo
 ```
 
 The same Claude model name maps to different real models depending on which provider you point at.
@@ -108,16 +110,18 @@ Each request logs `[provider] original -> mapped`, e.g. `[deepseek] claude-sonne
     "deepseek": {
       "upstream": "https://api.deepseek.com/anthropic",
       "map": {
-        "claude-sonnet-4.6": "deepseek-v4-flash",
-        "claude-opus-4.6":  "deepseek-v4-pro"
+        "claude-opus-4.6":  "deepseek-v4-pro",
+        "claude-sonnet-4.6": "deepseek-v4-flash"
       }
     },
     "ark": {
       "upstream": "https://ark.cn-beijing.volces.com/api/coding",
       "map": {
-        "claude-sonnet-4.6": "kimi-k2.7-code",
-        "claude-opus-4.6":  "doubao-seed-2.0-pro",
-        "claude-opus-4.7":  "glm-5.2"
+        "claude-opus-4.8":  "deepseek-v4-pro",
+        "claude-sonnet-5":  "deepseek-v4-flash",
+        "claude-opus-4.7":  "glm-5.2",
+        "claude-opus-4.6":  "kimi-k2.7-code",
+        "claude-opus-4.5":  "doubao-seed-2.1-turbo"
       }
     }
   }
@@ -134,21 +138,33 @@ Override the config path with `PROXY_CONFIG_PATH` if you want to keep a custom c
 
 To add a new provider: add an entry under `providers`, then point Claude Code at `http://127.0.0.1:8787/<name>/`. The `/v1/models` response is generated from the map keys automatically.
 
-## Modifying the Model Mapping
+## Adding or Changing Models
 
-To change which real model a Claude name maps to, edit `config/proxy-config.json`:
+The model map in `config/proxy-config.json` is **auto-synced** from the Claude-3p `configLibrary` at proxy startup (by `scripts/sync-models.cjs`). The configLibrary is the single source of truth: each provider's `inferenceModels` entry pairs an official Claude ID (`name`) with the backend model (`labelOverride`), and those pairs are written into the proxy's `map`.
 
-1. Open `config/proxy-config.json`.
-2. Under the desired `providers.<name>.map`, change the value for the official Claude model name.
-   - Keys (`claude-sonnet-4.6`, `claude-opus-4.6`) are the names Claude Code sees and sends.
-   - Values are the real model IDs the upstream provider expects.
-3. Save the file.
-4. Restart the proxy so the new config is loaded:
-   - If the watchdog is running: stop the proxy process (or run `bat\stop.bat` then `bat\restart-wd.bat`); the watchdog will restart it within a few seconds.
-   - If running manually: stop the current `node` process and run `scripts\start-claude-deepseek-proxy.ps1` again.
-5. Optional: if you use Claude-3p, update the `labelOverride` field in the matching configLibrary entry so the UI label matches the new model.
+### If you use Claude-3p (recommended)
 
-You can also add new providers or new Claude-name-to-real-model mappings. Each provider's `/v1/models` response is generated automatically from its map keys, so Claude Code will see any new official Claude names immediately after restart.
+1. Open the provider's configLibrary file, e.g. `%LOCALAPPDATA%\Claude-3p\configLibrary\<id>.json` (the `<id>` for each provider is listed in that folder's `_meta.json`).
+2. Add or edit an `inferenceModels` entry:
+   ```json
+   { "name": "claude-opus-4.8", "labelOverride": "deepseek-v4-pro", "supports1m": true }
+   ```
+   - `name` - official Claude model ID Claude Code sees and sends.
+   - `labelOverride` - real backend model ID the upstream expects.
+3. Restart the proxy so the sync runs and the proxy reloads:
+   ```powershell
+   bat\restart-wd.bat
+   ```
+
+Do **not** edit `proxy-config.json`'s `map` by hand for providers that have a configLibrary entry - the sync overwrites it on the next restart.
+
+### If you don't use Claude-3p
+
+Edit `config/proxy-config.json` directly under `providers.<name>.map`, then restart the proxy. The sync only touches providers that have a matching configLibrary entry, so a provider with no configLibrary entry keeps its hand-edited map.
+
+### configLibrary path
+
+`scripts/sync-models.cjs` resolves the configLibrary at: `CONFIG_LIBRARY_PATH` env var, else `%LOCALAPPDATA%\Claude-3p\configLibrary`. If not found, sync exits silently and leaves `proxy-config.json` unchanged. The sync is best-effort and non-fatal - on failure it logs to `logs/sync-models.log` and the proxy starts with whatever config is already on disk.
 
 ## TLS Note
 
@@ -190,6 +206,7 @@ scripts/install-autostart.ps1            install the watchdog scheduled task
 scripts/uninstall-autostart.ps1          remove the watchdog scheduled task
 scripts/start-claude-deepseek-proxy.ps1  standalone proxy starter (no watchdog), manual use
 scripts/start-claude.ps1                 wrapper: starts proxy + Claude, stops proxy on Claude exit
+scripts/sync-models.cjs                  syncs provider `map` in proxy-config.json from the Claude-3p configLibrary at proxy startup
 scripts/status.ps1                       check task / watchdog / proxy / Claude state
 bat/start.bat                            start the proxy
 bat/stop.bat                             stop proxy + watchdog
